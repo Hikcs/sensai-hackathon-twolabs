@@ -1,0 +1,62 @@
+5. Smart Feedback Engine — Scalable, Evidence-Linked Learning Feedback Context
+
+In SensAI, learners submit:
+
+Code solutions
+Text responses
+Multi-step problem-solving answers
+
+Current feedback:
+
+Varies in quality and depth
+Is difficult to scale consistently
+Often lacks specificity and actionability
+
+Challenges:
+
+Generic feedback doesn’t drive improvement
+Learners don’t always understand why they are wrong
+Re-evaluation loops are manual or fragmented
+Mission
+
+Design a smart feedback engine that transforms submissions and rubrics into:
+
+Concise, evidence-linked feedback
+Clear next-step guidance
+A seamless re-evaluation loop
+
+The goal is to simulate high-quality mentor feedback at scale.
+
+Example
+
+A learner submits incorrect code:
+
+Fails 3 test cases
+Uses inefficient logic
+
+System generates:
+
+“Fails edge case: empty input (Test #4)”
+“Loop causes O(n²) complexity — expected O(n log n)”
+Suggestion: “Consider using a heap-based approach”
+
+Workflow:
+Learner edits → clicks Re-evaluate → system updates feedback and score history
+
+Starter Kit
+Submission schema (code/text)
+Rubric definitions (criteria-wise scoring)
+Auto-grader stubs and sample submissions
+Objective
+Generate criterion-wise, evidence-linked feedback
+Attach feedback to:
+Code lines or snippets
+Specific reasoning gaps
+Build a feedback history timeline (before vs after improvements)
+Enable a one-click re-evaluation loop
+Maintain consistency across submissions at scale
+What to Think About
+What makes feedback actionable vs generic?
+How do you balance detail vs brevity?
+How should the system behave when multiple issues exist simultaneously?
+How do you ensure feedback improves learning, not just correctness?
