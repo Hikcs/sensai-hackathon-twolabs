@@ -3,8 +3,8 @@ from typing import List, Dict
 from api.db.user import insert_or_return_user
 from api.utils.db import get_new_db_connection
 from api.models import UserLoginData
-from google.oauth2 import id_token
-from google.auth.transport import requests
+from google.oauth2 import id_token # type: ignore
+from google.auth.transport import requests # type: ignore
 from api.settings import settings
 import os
 
