@@ -35,12 +35,12 @@ from api.utils.s3 import (
 from api.utils.audio import prepare_audio_input_for_ai
 from api.utils.file_analysis import extract_submission_file
 from api.db.user import get_user_first_name
-from langfuse import get_client, observe
+from langfuse import get_client, observe # type: ignore
 from api.prompts import compile_prompt
 from api.prompts.router import ROUTER_SYSTEM_PROMPT, ROUTER_USER_PROMPT
 from api.prompts.rewrite_query import REWRITE_QUERY_SYSTEM_PROMPT, REWRITE_QUERY_USER_PROMPT
 from api.prompts.objective_question import OBJECTIVE_QUESTION_SYSTEM_PROMPT, OBJECTIVE_QUESTION_USER_PROMPT
-from api.prompts.subjective_question import SUBJECTIVE_QUESTION_SYSTEM_PROMPT, SUBJECTIVE_QUESTION_USER_PROMPT
+from api.prompts.subjective_question import SUBJECTIVE_CODE_QUESTION_SYSTEM_PROMPT, SUBJECTIVE_QUESTION_SYSTEM_PROMPT, SUBJECTIVE_QUESTION_USER_PROMPT
 from api.prompts.doubt_solving import DOUBT_SOLVING_SYSTEM_PROMPT, DOUBT_SOLVING_USER_PROMPT
 from api.prompts.assignment import ASSIGNMENT_SYSTEM_PROMPT, ASSIGNMENT_USER_PROMPT
 
@@ -613,7 +613,7 @@ async def ai_response_for_question(request: AIChatRequest):
                         feedback: str = Field(
                             description="A single, comprehensive summary based on the scoring criteria; address the student by name if their name has been provided."
                         )
-                        scorecard: Optional[Scorecard] = Field(
+                        scorecard: Optional[Scorecard] = Field( # type: ignore
                             description="Score and feedback for each criterion from the scoring criteria; only include this in the response if the student's response is a valid response to the task"
                         )
 
@@ -643,9 +643,20 @@ async def ai_response_for_question(request: AIChatRequest):
                         user_details=user_details,
                     )
                 else:
-                    prompt_name = "subjective-question"
+                    # Subjective — pick system prompt based on response type
+                    if request.response_type == ChatResponseType.AUDIO:
+                        prompt_name = "subjective-question"
+                        #system_prompt = SUBJECTIVE_VOICE_QUESTION_SYSTEM_PROMPT
+                        system_prompt = SUBJECTIVE_QUESTION_SYSTEM_PROMPT
+                    elif request.response_type == ChatResponseType.CODE:  # verify this enum value
+                        prompt_name = "subjective-question"
+                        system_prompt = SUBJECTIVE_CODE_QUESTION_SYSTEM_PROMPT
+                    else:  # TEXT or default
+                        prompt_name = "subjective-question"
+                        system_prompt = SUBJECTIVE_QUESTION_SYSTEM_PROMPT
+
                     messages = compile_prompt(
-                        SUBJECTIVE_QUESTION_SYSTEM_PROMPT,
+                        system_prompt,
                         SUBJECTIVE_QUESTION_USER_PROMPT,
                         task_details=question_details,
                         user_details=user_details,
