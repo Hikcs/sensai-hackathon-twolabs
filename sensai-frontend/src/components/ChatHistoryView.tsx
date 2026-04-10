@@ -447,16 +447,24 @@ const ChatHistoryView: React.FC<ChatHistoryViewProps> = ({
                                                     )}
 
                                                     {shouldShowViewReport(message) && (
-                                                        <div className="my-3">
+                                                        <div className="my-3 flex gap-2">
                                                             <button
                                                                 onClick={() => onViewScorecard(message.scorecard || [])}
                                                                 className="bg-indigo-600 hover:bg-indigo-700 text-white dark:bg-[#333333] dark:hover:bg-[#444444] px-4 py-2 rounded-full text-xs transition-colors cursor-pointer flex items-center"
-                                                                type="button"
-                                                            >
+                                                                type="button">
                                                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                                                                 </svg>
                                                                 View Report
+                                                            </button>
+                                                            <button
+                                                                onClick={() => onRetry && onRetry()}
+                                                                className="bg-slate-900 hover:bg-slate-800 text-white dark:bg-[#333333] dark:hover:bg-[#444444] px-4 py-2 rounded-full text-xs transition-colors cursor-pointer flex items-center"
+                                                                type="button">
+                                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0.004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                                                </svg>
+                                                                Re-Evaluate
                                                             </button>
                                                         </div>
                                                     )}
