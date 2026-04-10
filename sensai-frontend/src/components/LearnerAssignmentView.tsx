@@ -47,6 +47,7 @@ interface ChatMessageLocal {
     audioData?: string;
     isError?: boolean;
     rawContent?: string; // Store the original JSON content for AI messages
+    detailed_feedback?: string; // Additional paragraph of information from LLM
 }
 
 // New assignment response interface
@@ -56,6 +57,7 @@ interface AssignmentResponse {
     key_area_scores: Record<string, number>;
     current_key_area: string;
     project_score?: number;
+    detailed_feedback?: string;
 }
 
 export default function LearnerAssignmentView({
@@ -323,12 +325,14 @@ export default function LearnerAssignmentView({
                     // For user file messages, extract filename from JSON content
                     let displayContent = message.content;
                     let rawContent = message.content;
+                    let detailedFeedback = undefined;
                     if (message.role === 'assistant' && message.content) {
                         try {
                             const parsedContent = JSON.parse(message.content);
                             if (parsedContent.feedback) {
                                 displayContent = parsedContent.feedback;
                                 rawContent = message.content;
+                                detailedFeedback = parsedContent.detailed_feedback;
                             }
                         } catch (error) {
                             // If parsing fails, use the original content
@@ -369,6 +373,7 @@ export default function LearnerAssignmentView({
                         audioData: audioData,
                         isError: false,
                         rawContent: rawContent,
+                        detailed_feedback: detailedFeedback,
                         fileUuid: fileUuid,
                         fileName: fileName
                     };
@@ -644,6 +649,7 @@ export default function LearnerAssignmentView({
                                 key_area_scores: {},
                                 current_key_area: "",
                                 project_score: undefined,
+                                detailed_feedback: "",
                             };
 
                             // Buffer to accumulate partial lines across chunks
@@ -690,35 +696,40 @@ export default function LearnerAssignmentView({
                                         assignmentResponse = { ...assignmentResponse, ...data };
 
                                         // Handle feedback-specific UI updates
-                                        if (data.feedback) {
-                                            // If this is the first feedback chunk we've received
-                                            if (!receivedAnyFeedback) {
-                                                receivedAnyFeedback = true;
-
-                                                // Stop showing the animation
-                                                setIsAiResponding(false);
-
-                                                // Add the AI message to chat history now that we have content
-                                                setChatHistory(prev => [...prev, {
-                                                    id: `ai-${Date.now()}`,
-                                                    content: assignmentResponse.feedback,
-                                                    sender: 'ai',
-                                                    timestamp: new Date(),
-                                                    messageType: 'text',
-                                                    audioData: undefined,
-                                                }]);
-                                            } else {
-                                                // Update the existing AI message content for subsequent chunks
-                                                setChatHistory(prev => {
-                                                    const newHistory = [...prev];
-                                                    const lastIndex = newHistory.length - 1;
-                                                    if (lastIndex >= 0 && newHistory[lastIndex].sender === 'ai') {
-                                                        newHistory[lastIndex] = { ...newHistory[lastIndex], content: assignmentResponse.feedback } as any;
-                                                    }
-                                                    return newHistory;
-                                                });
-                                            }
-                                        }
+                                         if (data.feedback || data.detailed_feedback) {
+                                             // If this is the first feedback chunk we've received
+                                             if (!receivedAnyFeedback) {
+                                                 receivedAnyFeedback = true;
+ 
+                                                 // Stop showing the animation
+                                                 setIsAiResponding(false);
+ 
+                                                 // Add the AI message to chat history now that we have content
+                                                 setChatHistory(prev => [...prev, {
+                                                     id: `ai-${Date.now()}`,
+                                                     content: assignmentResponse.feedback,
+                                                     detailed_feedback: assignmentResponse.detailed_feedback,
+                                                     sender: 'ai',
+                                                     timestamp: new Date(),
+                                                     messageType: 'text',
+                                                     audioData: undefined,
+                                                 }]);
+                                             } else {
+                                                 // Update the existing AI message content for subsequent chunks
+                                                 setChatHistory(prev => {
+                                                     const newHistory = [...prev];
+                                                     const lastIndex = newHistory.length - 1;
+                                                     if (lastIndex >= 0 && newHistory[lastIndex].sender === 'ai') {
+                                                         newHistory[lastIndex] = { 
+                                                            ...newHistory[lastIndex], 
+                                                            content: assignmentResponse.feedback,
+                                                            detailed_feedback: assignmentResponse.detailed_feedback 
+                                                         } as any;
+                                                     }
+                                                     return newHistory;
+                                                 });
+                                             }
+                                         }
 
                                         // Detect when report (scorecard) starts preparing as soon as we see scores and completed status
                                         if (data.key_area_scores && !showPreparingReport && (assignmentResponse.evaluation_status === "completed" || data.evaluation_status === "completed")) {
@@ -1017,6 +1028,26 @@ export default function LearnerAssignmentView({
         }
     }, [evaluationStatus, chatHistory, convertScorecardScoresToScorecard]);
 
+    const historicalScorecards = useMemo(() => {
+        const scorecards: ScorecardItem[][] = [];
+        chatHistory.forEach(msg => {
+            if (msg.sender === 'ai') {
+                try {
+                    const parsedContent = JSON.parse(msg.rawContent || msg.content);
+                    if (parsedContent.key_area_scores) {
+                        const sc = convertScorecardScoresToScorecard(parsedContent.key_area_scores);
+                        if (sc.length > 0) {
+                            scorecards.push(sc);
+                        }
+                    }
+                } catch {
+                    // ignore
+                }
+            }
+        });
+        return scorecards;
+    }, [chatHistory, convertScorecardScoresToScorecard]);
+
     // Load draft on task change
     useEffect(() => {
         const loadDraft = async () => {
@@ -1202,6 +1233,7 @@ export default function LearnerAssignmentView({
                         /* Use the ScorecardView component */
                         <ScorecardView
                             activeScorecard={activeScorecard}
+                            historicalScorecards={historicalScorecards}
                             handleBackToChat={handleBackToChat}
                             lastUserMessage={null}
                         />
@@ -1222,7 +1254,7 @@ export default function LearnerAssignmentView({
                                 handleSubmitAnswer={() => handleSubmitAnswer()}
                                 handleAudioSubmit={handleAudioSubmit}
                                 handleViewScorecard={handleViewScorecard}
-                                viewOnly={viewOnly || isCompleted}
+                                viewOnly={viewOnly}
                                 completedQuestionIds={{}}
                                 currentQuestionId={"assignment"}
                                 userId={userId}

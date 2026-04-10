@@ -798,4 +798,19 @@ class CreateIntegrationRequest(BaseModel):
 class UpdateIntegrationRequest(BaseModel):
     access_token: str | None = None
     refresh_token: str | None = None
+
+class CodeExecutionRequest(BaseModel):
+    source_code: str
+    language_id: int
+    stdin: Optional[str] = ""
+    user_id: int
+    task_id: int
+
+class TaskIDValidationError(Exception):
+    """Raised when task_id verification fails against the metadata table to prevent silent pipeline failures."""
+    def __init__(self, task_id: int):
+        self.task_id = task_id
+        self.message = f"Task ID {task_id} not found in metadata table. Aborting database interaction."
+        super().__init__(self.message)
+
     expires_at: datetime | None = None

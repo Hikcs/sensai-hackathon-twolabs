@@ -37,6 +37,7 @@ class Settings(BaseSettings):
     slack_course_created_webhook_url: str | None = None
     slack_usage_stats_webhook_url: str | None = None
     slack_alert_webhook_url: str | None = None
+    judge0_api_url: str = "https://judge0-ce.p.rapidapi.com"
     model_config = SettingsConfigDict(env_file=join(root_dir, ".env"), extra="ignore")
 
 

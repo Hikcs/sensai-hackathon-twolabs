@@ -5,20 +5,32 @@ import LearnerScorecard from './LearnerScorecard';
 
 interface ScorecardViewProps {
     activeScorecard: ScorecardItem[];
+    historicalScorecards?: ScorecardItem[][];
     handleBackToChat: () => void;
     lastUserMessage: ChatMessage | null;
 }
 
 const ScorecardView: React.FC<ScorecardViewProps> = ({
     activeScorecard,
+    historicalScorecards = [],
     handleBackToChat,
     lastUserMessage,
 }) => {
     const [isTextExpanded, setIsTextExpanded] = useState(false);
+    
+    // Default to the last submission (most recent) if available
+    const [selectedVersion, setSelectedVersion] = useState<number>(
+        historicalScorecards && historicalScorecards.length > 0 ? historicalScorecards.length - 1 : 0
+    );
 
     const toggleTextExpansion = () => {
         setIsTextExpanded(!isTextExpanded);
     };
+
+    // Determine which scorecard to show
+    const displayScorecard = historicalScorecards && historicalScorecards.length > 0 && selectedVersion >= 0 && selectedVersion < historicalScorecards.length
+        ? historicalScorecards[selectedVersion]
+        : activeScorecard;
 
     return (
         <div className="flex flex-col h-full px-6 py-6 overflow-auto relative">
@@ -74,7 +86,29 @@ const ScorecardView: React.FC<ScorecardViewProps> = ({
                     </div>
                 </div>
 
-                <LearnerScorecard scorecard={activeScorecard} className="mt-0" />
+                {historicalScorecards && historicalScorecards.length > 1 && (
+                    <div className="mb-6">
+                        <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-3 uppercase tracking-wider">Evaluation History</h3>
+                        <div className="flex flex-wrap gap-2">
+                            {historicalScorecards.map((_, index) => (
+                                <button
+                                    key={index}
+                                    onClick={() => setSelectedVersion(index)}
+                                    className={`px-4 py-2 rounded-full text-sm font-medium transition-colors cursor-pointer border ${
+                                        selectedVersion === index
+                                            ? 'bg-purple-600 text-white border-purple-600 shadow-md'
+                                            : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50 dark:bg-[#222222] dark:text-gray-300 dark:border-[#333333] dark:hover:bg-[#2a2a2a]'
+                                    }`}
+                                >
+                                    Attempt {index + 1}
+                                    {index === historicalScorecards.length - 1 && ' (Latest)'}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                <LearnerScorecard scorecard={displayScorecard} className="mt-0" />
             </div>
         </div>
     );

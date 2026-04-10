@@ -549,6 +549,7 @@ const ChatView = forwardRef<ChatViewHandle, ChatViewProps>(({
                     handleCodeSubmit={handleCodeSubmit}
                     onCodeRun={handleCodeRun}
                     disableCopyPaste={disableCopyPaste}
+                    submitButtonLabel={currentChatHistory.some(msg => msg.sender === 'ai') ? 'Re-evaluate' : 'Submit'}
                     onCodeChange={(updatedCode) => {
                         setTimeout(() => {
                             setCodeContent(updatedCode);

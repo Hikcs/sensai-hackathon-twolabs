@@ -446,6 +446,22 @@ const ChatHistoryView: React.FC<ChatHistoryViewProps> = ({
                                                         </pre>
                                                     )}
 
+                                                    {message.sender === 'ai' && message.detailed_feedback && (
+                                                        <div className="mt-4 pt-4 border-t border-gray-100 dark:border-[#2D2D2D] text-sm font-sans text-gray-600 dark:text-gray-400 markdown-content">
+                                                            <div className="flex items-center mb-2 text-[10px] uppercase tracking-wider font-bold text-gray-400 dark:text-gray-500">
+                                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                                </svg>
+                                                                Conceptual Deep Dive
+                                                            </div>
+                                                            <Markdown
+                                                                remarkPlugins={[remarkGfm]}
+                                                            >
+                                                                {message.detailed_feedback}
+                                                            </Markdown>
+                                                        </div>
+                                                    )}
+
                                                     {shouldShowViewReport(message) && (
                                                         <div className="my-3">
                                                             <button

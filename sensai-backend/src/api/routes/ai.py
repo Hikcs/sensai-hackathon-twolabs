@@ -3,6 +3,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from typing import AsyncGenerator, Optional, Dict
 import json
+import uuid
 from copy import deepcopy
 from pydantic import BaseModel, Field, create_model
 from api.config import openai_plan_to_model_name
@@ -11,6 +12,7 @@ from api.models import (
     ChatResponseType,
     TaskType,
     QuestionType,
+    TaskIDValidationError,
 )
 from api.llm import (
     run_llm_with_openai,
@@ -42,7 +44,6 @@ from api.prompts.rewrite_query import REWRITE_QUERY_SYSTEM_PROMPT, REWRITE_QUERY
 from api.prompts.objective_question import OBJECTIVE_QUESTION_SYSTEM_PROMPT, OBJECTIVE_QUESTION_USER_PROMPT
 from api.prompts.subjective_question import SUBJECTIVE_CODE_QUESTION_SYSTEM_PROMPT, SUBJECTIVE_QUESTION_SYSTEM_PROMPT, SUBJECTIVE_QUESTION_USER_PROMPT
 from api.prompts.doubt_solving import DOUBT_SOLVING_SYSTEM_PROMPT, DOUBT_SOLVING_USER_PROMPT
-from api.prompts.assignment import ASSIGNMENT_SYSTEM_PROMPT, ASSIGNMENT_USER_PROMPT
 
 router = APIRouter()
 
@@ -126,6 +127,39 @@ def format_chat_history_with_audio(chat_history: list[dict]) -> str:
             parts.append(f"**{label}**\n\n{content_str}\n\n")
 
     return "\n\n---\n\n".join(parts)
+
+def normalize_submission(user_response: str, response_type: ChatResponseType, chat_history: Optional[list[dict]] = None) -> str:
+    """
+    Unify the payload from code, text, or multistep inputs into a standardized string format.
+    Generates a unique Submission-ID and calculates Attempt number.
+    """
+    sub_id = str(uuid.uuid4())
+    attempt = sum(1 for m in chat_history if m.get("role") == "user") + 1 if chat_history else 1
+    header = f"Submission-ID: {sub_id}\nAttempt: {attempt}\n\n"
+
+    if response_type == ChatResponseType.TEXT or not user_response:
+        return header + (user_response or "")
+
+    try:
+        parsed_data = json.loads(user_response)
+    except (json.JSONDecodeError, TypeError):
+        # If it's not JSON, return as is (e.g., a file UUID or plain string)
+        return header + user_response
+
+    result = user_response
+    if response_type == ChatResponseType.CODE:
+        if isinstance(parsed_data, dict):
+            result = "\n\n".join([f"### {k}\n```\n{v}\n```" for k, v in parsed_data.items()])
+        elif isinstance(parsed_data, list):
+            result = "\n\n".join([f"```\n{item}\n```" if isinstance(item, str) else f"```{item.get('language', '')}\n{item.get('code', '')}\n```" for item in parsed_data])
+
+    # Handle multistep or generic structured input
+    elif isinstance(parsed_data, dict):
+        result = "\n".join([f"**{k}**: {v}" for k, v in parsed_data.items()])
+    elif isinstance(parsed_data, list):
+        result = "\n".join([f"- {item}" for item in parsed_data])
+
+    return header + result
 
 
 @observe(name="rewrite_query")
@@ -288,13 +322,24 @@ def format_ai_scorecard_report(scorecard: list[dict]) -> str:
     return "\n\n".join(scorecard_as_prompt)
 
 
-def convert_scorecard_to_prompt(scorecard: list[dict]) -> str:
+def convert_scorecard_to_prompt(scorecard: dict) -> str:
     scoring_criteria_as_prompt = []
+    criteria = scorecard.get("criteria", [])
+    
+    # Calculate the total range to normalize weights so they sum to 1.0 per rubric set
+    total_range = sum(float(c.get('max_score', 0)) - float(c.get('min_score', 0)) for c in criteria)
 
-    for index, criterion in enumerate(scorecard["criteria"]):
+    for index, criterion in enumerate(criteria):
         criterion_name = criterion["name"].replace('"', "")
+        
+        # Normalize weight based on score range relative to the total scorecard range
+        score_range = float(criterion.get('max_score', 0)) - float(criterion.get('min_score', 0))
+        weight = (score_range / total_range) if total_range > 0 else (1.0 / len(criteria))
+
         scoring_criteria_as_prompt.append(
-            f"""Criterion {index + 1}:\n**Name**: **{criterion_name}** [min_score: {criterion['min_score']}, max_score: {criterion['max_score']}, pass_score: {criterion.get('pass_score', criterion['max_score'])}]\n\n{criterion['description']}"""
+            f"Criterion {index + 1}:\n"
+            f"**Name**: **{criterion_name}** [Normalized Weight: {weight:.2f}, min_score: {criterion['min_score']}, max_score: {criterion['max_score']}, pass_score: {criterion.get('pass_score', criterion['max_score'])}]\n\n"
+            f"{criterion['description']}"
         )
 
     return "\n\n".join(scoring_criteria_as_prompt)
@@ -409,7 +454,7 @@ async def ai_response_for_question(request: AIChatRequest):
 
             task = await get_task(request.task_id)
             if not task:
-                raise HTTPException(status_code=404, detail="Task not found")
+                raise TaskIDValidationError(request.task_id)
 
             metadata["task_title"] = task["title"]
 
@@ -419,7 +464,7 @@ async def ai_response_for_question(request: AIChatRequest):
                     "content": (
                         get_user_audio_message_for_chat_history(request.user_response)
                         if request.response_type == ChatResponseType.AUDIO
-                        else request.user_response
+                        else normalize_submission(request.user_response, request.response_type, chat_history)
                     ),
                 }
             ]
@@ -613,6 +658,9 @@ async def ai_response_for_question(request: AIChatRequest):
                         feedback: str = Field(
                             description="A single, comprehensive summary based on the scoring criteria; address the student by name if their name has been provided."
                         )
+                        detailed_feedback: Optional[str] = Field(
+                            description="A second, deeper paragraph of information that explores the underlying theory, conceptual context, or a 'pro-tip' related to the task."
+                        )
                         scorecard: Optional[Scorecard] = Field( # type: ignore
                             description="Score and feedback for each criterion from the scoring criteria; only include this in the response if the student's response is a valid response to the task"
                         )
@@ -656,7 +704,7 @@ async def ai_response_for_question(request: AIChatRequest):
                         system_prompt = SUBJECTIVE_QUESTION_SYSTEM_PROMPT
 
                     messages = compile_prompt(
-                        system_prompt,
+                        SUBJECTIVE_QUESTION_SYSTEM_PROMPT,
                         SUBJECTIVE_QUESTION_USER_PROMPT,
                         task_details=question_details,
                         user_details=user_details,
@@ -664,6 +712,7 @@ async def ai_response_for_question(request: AIChatRequest):
             else:
                 prompt_name = "doubt_solving"
                 messages = compile_prompt(
+
                     DOUBT_SOLVING_SYSTEM_PROMPT,
                     DOUBT_SOLVING_USER_PROMPT,
                     reference_material=question_details,
@@ -745,7 +794,7 @@ async def ai_response_for_assignment(request: AIChatRequest):
             # Get assignment data
             task = await get_task(request.task_id)
             if not task:
-                raise HTTPException(status_code=404, detail="Task not found")
+                raise TaskIDValidationError(request.task_id)
 
             if task["type"] != TaskType.ASSIGNMENT:
                 raise HTTPException(status_code=400, detail="Task is not an assignment")
@@ -806,7 +855,7 @@ async def ai_response_for_assignment(request: AIChatRequest):
                     "content": (
                         get_user_audio_message_for_chat_history(request.user_response)
                         if request.response_type == ChatResponseType.AUDIO
-                        else request.user_response
+                        else normalize_submission(request.user_response, request.response_type, formatted_chat_history)
                     ),
                 }
             ]
@@ -924,6 +973,9 @@ async def ai_response_for_assignment(request: AIChatRequest):
                 feedback: Optional[str] = Field(
                     description="A single, comprehensive summary based on the scoring criteria; address the student by name if their name has been provided.",
                 )
+                detailed_feedback: Optional[str] = Field(
+                    description="A second, deeper paragraph of information that explores the underlying theory, conceptual context, or a 'pro-tip' related to the task."
+                )
                 evaluation_status: Optional[str] = Field(
                     description="The status of the evaluation; can be `in_progress`, `needs_resubmission`, or `completed`",
                 )
@@ -940,17 +992,17 @@ async def ai_response_for_assignment(request: AIChatRequest):
                 chain_of_thought: str = Field(
                     description="Concise analysis of the student's submission to the assignment and what the evaluation result should be"
                 )
+                detailed_feedback: Optional[str] = Field(
+                    description="A second, deeper paragraph of information that explores the underlying theory, conceptual context, or a 'pro-tip' related to the task."
+                )
                 assignment_score: Optional[float] = Field(
                     description="Assignment score assigned when evaluating initial file submission"
                 )
 
             messages = compile_prompt(
-                ASSIGNMENT_SYSTEM_PROMPT,
-                ASSIGNMENT_USER_PROMPT,
                 assignment_details=assignment_details,
                 user_details=user_details,
             )
-
             messages += full_chat_history
 
             # Build input for metadata

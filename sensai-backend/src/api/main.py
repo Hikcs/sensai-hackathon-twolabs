@@ -10,9 +10,9 @@ import os
 from os.path import exists
 from api.config import UPLOAD_FOLDER_NAME
 from api.utils.logging import logger
+from api.models import TaskIDValidationError
 from api.routes import (
-    auth,
-    batch,
+    auth,  batch,
     code,
     cohort,
     course,
@@ -25,8 +25,13 @@ from api.routes import (
     file,
     ai,
     scorecard,
-    integration,
-)
+    integration)
+async def task_id_validation_exception_handler(request: Request, exc: TaskIDValidationError):
+    logging.error(f"Database Integrity Check Failed: {exc.message} on {request.method} {request.url.path}")
+    return JSONResponse(
+        status_code=400,
+        content={"detail": exc.message},
+    )
 
 # from api.routes.ai import (
 #     resume_pending_task_generation_jobs,

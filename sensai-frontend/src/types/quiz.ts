@@ -123,6 +123,7 @@ export interface ChatMessage {
     is_correct?: boolean; // Add is_correct attribute for exam responses
     fileUuid?: string; // UUID for file messages
     fileName?: string; // Filename for file messages
+    detailed_feedback?: string; // Additional paragraph of information from LLM
 }   
 
 
@@ -142,4 +143,5 @@ export interface AIResponse {
     feedback: string;
     is_correct: boolean;
     scorecard?: ScorecardItem[];
+    detailed_feedback?: string;
 }
